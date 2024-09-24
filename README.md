@@ -13,7 +13,7 @@ Create and boot a SSH ramdisk on checkm8 devices
 </p>
 
 ---
-
+This basically fixes the rsa_check error in the original script
 # Prerequsites
 
 1. A computer running macOS/linux
@@ -65,3 +65,4 @@ sudo usbmuxd -p -f
 - [Nebula](https://github.com/itsnebulalol) for a bunch of QOL fixes to this script
 - [OpenAI](https://chat.openai.com/chat) for converting [kerneldiff](https://github.com/mcg29/kerneldiff) into [C](https://github.com/verygenericname/kerneldiff_C)
 - [Ploosh](https://github.com/plooshi) for KPlooshFinder
+- [verygenericname](https://github.com/verygenericname/) for this tool
