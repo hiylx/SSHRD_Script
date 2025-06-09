@@ -9,12 +9,9 @@ oscheck=$(uname)
 
 version="$1"
 
-major=$(echo "$version" | awk -F. '{print $1}')
-minor=$(echo "$version" | awk -F. '{print $2}')
-patch=$(echo "$version" | awk -F. '{print $3}')
-major=${major:-0}
-minor=${minor:-0}
-patch=${patch:-0}
+major=$(echo "$version" | cut -d. -f1)
+minor=$(echo "$version" | cut -d. -f2)
+patch=$(echo "$version" | cut -d. -f3)
     
 ERR_HANDLER () {
     [ $? -eq 0 ] && exit
@@ -23,10 +20,10 @@ ERR_HANDLER () {
     killall iproxy 2>/dev/null | true
 
     # echo "[-] Uploading logs. If this fails, it's not a big deal."
-    for file in logs/*.log; do
-        mv "$file" logs/FAILURE_${file##*/}
-    done
-    curl -A SSHRD_Script -F "fileToUpload=@$(ls logs/*.log)" https://nathan4s.lol/SSHRD_Script/log_upload.php > /dev/null 2>&1 | true
+#    for file in logs/*.log; do
+#        mv "$file" logs/FAILURE_${file##*/}
+#    done
+#    curl -A SSHRD_Script -F "fileToUpload=@$(ls logs/*.log)" https://nathan4s.lol/SSHRD_Script/log_upload.php > /dev/null 2>&1 | true
     # echo "[!] Done uploading logs, I'll be sure to look at them and fix the issue you are facing"
 }
 
@@ -45,10 +42,14 @@ if [ -e sshtars/ssh.tar.gz ]; then
 fi
 
 if [ ! -e "$oscheck"/gaster ]; then
-    curl -sLO https://nightly.link/verygenericname/gaster/workflows/makefile/main/gaster-"$oscheck".zip
-    unzip gaster-"$oscheck".zip
+    gaster="gaster-$oscheck"
+    if [ "$oscheck" = 'Linux' ]; then
+        gaster="gaster-$oscheck-x86_64"
+    fi
+    curl -sLO https://nightly.link/verygenericname/gaster/workflows/makefile/main/"$gaster".zip
+    unzip "$gaster".zip
     mv gaster "$oscheck"/
-    rm -rf gaster gaster-"$oscheck".zip
+    rm -rf gaster "$gaster".zip
 fi
 
 chmod +x "$oscheck"/*
@@ -67,9 +68,9 @@ elif [ "$1" = 'dump-blobs' ]; then
         device=rdisk1
     fi
     "$oscheck"/sshpass -p 'alpine' ssh -o StrictHostKeyChecking=no -p2222 root@localhost "cat /dev/$device" | dd of=dump.raw bs=256 count=$((0x4000))
-    "$oscheck"/img4tool --convert -s dumped.shsh dump.raw
+    "$oscheck"/img4tool --convert -s dumped.shsh2 dump.raw
     killall iproxy 2>/dev/null | true
-    echo "[*] Onboard blobs should have dumped to the dumped.shsh file"
+    echo "[*] Onboard blobs should have dumped to the dumped.shsh2 file"
     exit
 elif [ "$1" = 'reboot' ]; then
     "$oscheck"/iproxy 2222 22 &>/dev/null &
@@ -124,11 +125,7 @@ if [ "$1" = 'reset' ]; then
         exit
     fi
 
-    if [ "$check" = '0x8960' ]; then
-        "$oscheck"/ipwnder > /dev/null
-    else
-        "$oscheck"/gaster pwn > /dev/null
-    fi
+    "$oscheck"/gaster pwn > /dev/null
     "$oscheck"/gaster reset > /dev/null
     "$oscheck"/irecovery -f sshramdisk/iBSS.img4
     sleep 2
@@ -167,11 +164,7 @@ if [ "$1" = 'boot' ]; then
     minor=${minor:-0}
     patch=${patch:-0}
     
-    if [ "$check" = '0x8960' ]; then
-        "$oscheck"/ipwnder > /dev/null
-    else
-        "$oscheck"/gaster pwn > /dev/null
-    fi
+    "$oscheck"/gaster pwn > /dev/null
     "$oscheck"/gaster reset > /dev/null
     "$oscheck"/irecovery -f sshramdisk/iBSS.img4
     sleep 2
@@ -241,8 +234,13 @@ else
 fi
 
 cd ..
+if [ "$major" -gt 18 ] || [ "$major" -eq 18 ]; then
+"$oscheck"/img4 -i work/"$(awk "/""${replace}""/{x=1}x&&/iBSS[.]/{print;exit}" work/BuildManifest.plist | grep '<string>' |cut -d\> -f2 |cut -d\< -f1 | sed 's/Firmware[/]dfu[/]//')" -o work/iBSS.dec
+"$oscheck"/img4 -i work/"$(awk "/""${replace}""/{x=1}x&&/iBEC[.]/{print;exit}" work/BuildManifest.plist | grep '<string>' |cut -d\> -f2 |cut -d\< -f1 | sed 's/Firmware[/]dfu[/]//')" -o work/iBEC.dec
+else
 "$oscheck"/gaster decrypt work/"$(awk "/""${replace}""/{x=1}x&&/iBSS[.]/{print;exit}" work/BuildManifest.plist | grep '<string>' |cut -d\> -f2 |cut -d\< -f1 | sed 's/Firmware[/]dfu[/]//')" work/iBSS.dec
 "$oscheck"/gaster decrypt work/"$(awk "/""${replace}""/{x=1}x&&/iBEC[.]/{print;exit}" work/BuildManifest.plist | grep '<string>' |cut -d\> -f2 |cut -d\< -f1 | sed 's/Firmware[/]dfu[/]//')" work/iBEC.dec
+fi
 "$oscheck"/iBoot64Patcher work/iBSS.dec work/iBSS.patched
 "$oscheck"/img4 -i work/iBSS.patched -o sshramdisk/iBSS.img4 -M work/IM4M -A -T ibss
 "$oscheck"/iBoot64Patcher work/iBEC.dec work/iBEC.patched -b "rd=md0 debug=0x2014e -v wdt=-1 `if [ -z "$2" ]; then :; else echo "$2=$3"; fi` `if [ "$check" = '0x8960' ] || [ "$check" = '0x7000' ] || [ "$check" = '0x7001' ]; then echo "nand-enable-reformat=1 -restore"; fi`" -n
@@ -365,12 +363,12 @@ echo "[*] Cleaning up work directory"
 rm -rf work 12rd
 
  # echo "[*] Uploading logs. If this fails, your ramdisk is still created."
- set +e
- for file in logs/*.log; do
-    mv "$file" logs/SUCCESS_${file##*/}
- done
- curl -A SSHRD_Script -F "fileToUpload=@$(ls logs/*.log)" https://nathan4s.lol/SSHRD_Script/log_upload.php > /dev/null 2>&1 | true
- set -e
+# set +e
+# for file in logs/*.log; do
+#    mv "$file" logs/SUCCESS_${file##*/}
+# done
+# curl -A SSHRD_Script -F "fileToUpload=@$(ls logs/*.log)" https://nathan4s.lol/SSHRD_Script/log_upload.php > /dev/null 2>&1 | true
+# set -e
  # echo "[*] Done uploading logs!"
 
 echo ""
