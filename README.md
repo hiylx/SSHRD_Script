@@ -13,7 +13,7 @@ Create and boot a SSH ramdisk on checkm8 devices
 </p>
 
 ---
-
+This basically fixes the rsa_check error in the original script
 # Prerequsites
 
 1. A computer running macOS/linux
